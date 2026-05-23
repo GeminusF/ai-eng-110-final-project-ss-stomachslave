@@ -99,6 +99,16 @@ def register_web_ui(app: FastAPI, settings: Settings, repository: AnalysisReposi
         result_html = render_result(result, settings=settings) + history_html
         return _ui_response(request, result_html, default_mode=source_mode)
     
+    @app.get("/ui/history/{analysis_id}", response_class=HTMLResponse)
+    async def ui_get_history_item(request: Request, analysis_id: str) -> HTMLResponse:
+        record = await repository.get(analysis_id)
+        if record is None:
+            return HTMLResponse(
+                render_message("Not Found", "Analysis record not found", kind="error"),
+                status_code=404,
+            )
+        return HTMLResponse(render_result(record, settings=settings))
+
 def normalize_source_mode(mode: str | None) -> str:
     return "online" if mode == "online" else "offline"
 
@@ -109,6 +119,59 @@ def is_offline_mode(mode: str | None) -> bool:
 
 def default_source_mode(settings: Settings) -> str:
     return "offline" if settings.offline_mode else "online"
+
+def extract_meal_name(image_path: str) -> str:
+    stem = Path(image_path).stem
+    if len(stem) > 32 and re.match(r"^[0-9a-fA-F]{32}_", stem):
+        name = stem[33:]
+    else:
+        name = stem
+    return name.replace("_", " ").title()
+
+
+def format_datetime(dt: datetime) -> str:
+    return dt.strftime("%b %d, %H:%M")
+
+
+def safe_upload_image_path(filename: str, settings: Settings) -> Path | None:
+    if "/" in filename or "\\" in filename or filename in {"", ".", ".."}:
+        return None
+    image_path = (settings.upload_dir / filename).resolve()
+    upload_root = settings.upload_dir.resolve()
+    if upload_root != image_path.parent:
+        return None
+    if image_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+        return None
+    if not image_path.is_file():
+        return None
+    return image_path
+
+
+def image_media_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return "image/png"
+    if suffix == ".webp":
+        return "image/webp"
+    return "image/jpeg"
+
+def upload_image_url(image_path: str, settings: Settings | None) -> str | None:
+    if settings is None:
+        return None
+    path = Path(image_path)
+    try:
+        resolved = path.resolve()
+        upload_root = settings.upload_dir.resolve()
+    except OSError:
+        return None
+    if resolved.parent != upload_root:
+        return None
+    if resolved.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+        return None
+    if not resolved.is_file():
+        return None
+    return f"/ui/uploads/{quote(resolved.name)}"
+
 
 def _ui_response(
     request: Request,
@@ -282,6 +345,58 @@ def render_loading_card() -> str:
       </div>
     </section>
     """
+
+def render_history_sidebar(
+    history: Sequence[AnalysisResult],
+    *,
+    settings: Settings | None = None,
+) -> str:
+    if not history:
+        return """
+        <div class="history-list" id="history-list" hx-swap-oob="true">
+          <p class="history-empty">No past analyses recorded</p>
+        </div>
+        """
+
+    items = []
+    for record in history:
+        status_label = record.status.value.replace("_", " ").title()
+        status_class = record.status.value.lower()
+        formatted_date = format_datetime(record.created_at)
+        meal_name = extract_meal_name(record.image_path)
+        kcal_val = record.totals.kcal
+        image_url = upload_image_url(record.image_path, settings)
+        if image_url:
+            thumbnail_html = (
+                f'<span class="history-thumb">'
+                f'<img class="history-thumb-img" src="{escape(image_url)}" '
+                f'alt="{escape(meal_name)} thumbnail"></span>'
+            )
+        else:
+            thumbnail_html = '<span class="history-thumb" aria-hidden="true"></span>'
+        item_html = f"""
+        <button type="button" class="history-item"
+          hx-get="/ui/history/{escape(record.id)}"
+          hx-target="#result"
+          hx-swap="innerHTML"
+          hx-indicator="#analyzing">
+          {thumbnail_html}
+          <span>
+            <span class="history-name">{escape(meal_name)}</span>
+            <span class="history-date">{escape(formatted_date)}</span>
+            <span class="history-status {escape(status_class)}">{escape(status_label)}</span>
+          </span>
+          <span class="history-kcal">{kcal_val:.0f}<span>kcal</span></span>
+        </button>
+        """
+        items.append(item_html)
+
+    return f"""
+    <div class="history-list" id="history-list" hx-swap-oob="true">
+      {"".join(items)}
+    </div>
+    """
+
 
 def render_message(title: str, detail: str, *, kind: str) -> str:
     safe_kind = "error" if kind == "error" else "warning"
