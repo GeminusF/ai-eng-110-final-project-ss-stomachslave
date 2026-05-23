@@ -229,6 +229,203 @@ def test_source_mode_defaults_safely_to_offline():
     assert web_ui.is_offline_mode(None) is True
     assert web_ui.is_offline_mode("online") is False
 
+
+def test_failed_analysis_renders_nutrition_error_not_unknown_meal():
+    result = AnalysisResult(
+        status=AnalysisStatus.failed,
+        image_path="meal.png",
+        warnings=["Nutrition lookup failed for rice: USDA search failed"],
+        error_message="No nutrition facts could be fetched.",
+    )
+
+    html = web_ui.render_result(result)
+
+    assert "Analysis failed" in html
+    assert "No nutrition facts could be fetched" in html
+    assert "<li>Nutrition lookup failed for rice: USDA search failed</li>" in html
+    assert "USDA search failed" in html
+    assert "No meal recognized" not in html
+
+
+def test_completed_result_includes_status_weight_confidence_and_source():
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path="meal.png",
+        ingredients=[
+            IngredientResult(
+                name="white rice",
+                grams=150,
+                confidence=0.87,
+                nutrition=NutritionTotals(kcal=195, protein_g=4.0, carbs_g=42.0, fat_g=0.4),
+                source="USDA",
+            )
+        ],
+        totals=NutritionTotals(kcal=195, protein_g=4.0, carbs_g=42.0, fat_g=0.4),
+    )
+
+    html = web_ui.render_result(result)
+
+    assert "Analysis complete" in html
+    assert "Estimated total weight: 150 g" in html
+    assert "Calories" in html
+    assert "Macronutrient Balance" in html
+    assert "<th>Confidence</th>" in html
+    assert "confidence-track" in html
+    assert "87%" in html
+    assert "<th>Source</th>" in html
+    assert "USDA" in html
+
+
+def test_completed_result_uses_real_meal_thumbnail_when_safe(tmp_path):
+    image_path = tmp_path / "meal.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage")
+    settings = Settings(offline_mode=True, upload_dir=tmp_path, retry_attempts=1)
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path=str(image_path),
+        ingredients=[
+            IngredientResult(
+                name="egg",
+                grams=50,
+                confidence=0.95,
+                nutrition=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+                source="offline",
+            )
+        ],
+        totals=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+    )
+
+    html = web_ui.render_result(result, settings=settings)
+
+    assert '<img class="meal-thumb-img"' in html
+    assert 'src="/ui/uploads/meal.png"' in html
+
+
+def test_completed_result_falls_back_when_meal_thumbnail_is_not_safe(tmp_path):
+    settings = Settings(offline_mode=True, upload_dir=tmp_path, retry_attempts=1)
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path=str(tmp_path.parent / "meal.png"),
+        ingredients=[
+            IngredientResult(
+                name="egg",
+                grams=50,
+                confidence=0.95,
+                nutrition=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+                source="offline",
+            )
+        ],
+        totals=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+    )
+
+    html = web_ui.render_result(result, settings=settings)
+
+    assert '<img class="meal-thumb-img"' not in html
+    assert 'class="meal-thumb" aria-hidden="true"' in html
+
+
+def test_partial_result_includes_table_and_warning_list():
+    result = AnalysisResult(
+        status=AnalysisStatus.partial,
+        image_path="meal.png",
+        ingredients=[
+            IngredientResult(
+                name="broccoli",
+                grams=80,
+                confidence=0.8,
+                nutrition=NutritionTotals(kcal=28, protein_g=2.4, carbs_g=5.6, fat_g=0.3),
+                source="USDA",
+            )
+        ],
+        totals=NutritionTotals(kcal=28, protein_g=2.4, carbs_g=5.6, fat_g=0.3),
+        warnings=["Nutrition lookup failed for chicken: timeout"],
+    )
+
+    html = web_ui.render_result(result)
+
+    assert "Partial" in html
+    assert "<table>" in html
+    assert "broccoli" in html
+    assert "Warnings" in html
+    assert "<li>Nutrition lookup failed for chicken: timeout</li>" in html
+
+
+def test_history_sidebar_preserves_oob_and_history_target():
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path="egg_avocado_toast.png",
+        ingredients=[
+            IngredientResult(
+                name="egg",
+                grams=50,
+                confidence=0.95,
+                nutrition=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+                source="offline",
+            )
+        ],
+        totals=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+    )
+
+    html = web_ui.render_history_sidebar([result])
+
+    assert 'id="history-list"' in html
+    assert 'hx-swap-oob="true"' in html
+    assert 'hx-get="/ui/history/' in html
+    assert 'hx-target="#result"' in html
+    assert 'hx-swap="innerHTML"' in html
+    assert "Egg Avocado Toast" in html
+    assert "72" in html
+
+
+def test_history_sidebar_uses_real_meal_thumbnail_when_safe(tmp_path):
+    image_path = tmp_path / "egg_avocado_toast.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage")
+    settings = Settings(offline_mode=True, upload_dir=tmp_path, retry_attempts=1)
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path=str(image_path),
+        ingredients=[
+            IngredientResult(
+                name="egg",
+                grams=50,
+                confidence=0.95,
+                nutrition=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+                source="offline",
+            )
+        ],
+        totals=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+    )
+
+    html = web_ui.render_history_sidebar([result], settings=settings)
+
+    assert '<img class="history-thumb-img"' in html
+    assert 'src="/ui/uploads/egg_avocado_toast.png"' in html
+    assert "Egg Avocado Toast" in html
+
+
+def test_history_sidebar_falls_back_when_meal_thumbnail_is_not_safe(tmp_path):
+    settings = Settings(offline_mode=True, upload_dir=tmp_path, retry_attempts=1)
+    result = AnalysisResult(
+        status=AnalysisStatus.completed,
+        image_path=str(tmp_path.parent / "outside.png"),
+        ingredients=[
+            IngredientResult(
+                name="egg",
+                grams=50,
+                confidence=0.95,
+                nutrition=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+                source="offline",
+            )
+        ],
+        totals=NutritionTotals(kcal=72, protein_g=6.3, carbs_g=0.4, fat_g=5.0),
+    )
+
+    html = web_ui.render_history_sidebar([result], settings=settings)
+
+    assert '<img class="history-thumb-img"' not in html
+    assert '<span class="history-thumb" aria-hidden="true"></span>' in html
+
+
 def test_uploaded_image_route_serves_only_safe_uploads(tmp_path):
     image_path = tmp_path / "meal.png"
     image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage")
