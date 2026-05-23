@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+test_tmp/
+local_tmp*/
+pytest-cache-files-*/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Project secrets and runtime files
+.env
+*.db
+*.sqlite3
+*.log
+uploads/*
+!uploads/.gitkeep
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

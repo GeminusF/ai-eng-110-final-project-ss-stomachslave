@@ -1,0 +1,34 @@
+[project]
+name = "foodanalyzer"
+version = "0.1.0"
+description = "Topic 2 AI Food Analyzer software engineering layer"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["foodanalyzer"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = [
+    "B008",  # FastAPI/Typer intentionally use function calls in defaults.
+    "B017",  # Provided smoke tests intentionally assert broad validation errors.
+    "E501",  # Inline HTML/CSS/SVG templates are intentionally long.
+    "F401",  # Some provided smoke-test imports are part of the public contract surface.
+    "I001",  # Avoid formatting churn in the final Git/CI bonus PR.
+]
+
+[tool.mypy]
+python_version = "3.12" 
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+no_implicit_optional = true
