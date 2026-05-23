@@ -33,3 +33,39 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, object]:
         return {"ok": await repo.health()}
+    
+    @app.post("/analyze", response_model=AnalysisResult)
+    async def analyze(file: UploadFile = File(...)) -> AnalysisResult:
+        data = await file.read()
+        try:
+            image_path = save_upload_bytes(
+                data,
+                file.filename or "upload",
+                settings.upload_dir,
+                settings.max_image_bytes,
+            )
+        except ImageValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        analyzer = build_analyzer(settings, offline=settings.offline_mode)
+        analyzer.repository = repo
+        try:
+            return await analyzer.analyze(image_path, save=True)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.get("/analyses", response_model=list[AnalysisRecord])
+    async def list_analyses(limit: int = 10) -> list[AnalysisRecord]:
+        return await repo.list_recent(limit)
+
+    @app.get("/analyses/{analysis_id}", response_model=AnalysisRecord)
+    async def get_analysis(analysis_id: str) -> AnalysisRecord:
+        record = await repo.get(analysis_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="analysis not found")
+        return record
+
+    return app
+
+
+app = create_app()
