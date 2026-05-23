@@ -1682,6 +1682,175 @@ def render_history_sidebar(
     """
 
 
+def render_result(result: AnalysisResult, *, settings: Settings | None = None) -> str:
+    if result.status == AnalysisStatus.failed:
+        detail = result.error_message or "No nutrition facts could be fetched."
+        return render_message("Analysis failed", detail, kind="error") + render_warning_list(
+            result.warnings,
+            kind="error",
+        )
+
+    if result.status == AnalysisStatus.unknown_meal or not result.ingredients:
+        return render_message(
+            "No meal recognized",
+            "No meal was recognized in this image. Please upload a clear photo of food.",
+            kind="warning",
+        )
+
+    protein_g = result.totals.protein_g
+    carbs_g = result.totals.carbs_g
+    fat_g = result.totals.fat_g
+    macro_total = protein_g + carbs_g + fat_g
+    if macro_total > 0:
+        protein_pct = (protein_g / macro_total) * 100
+        carbs_pct = (carbs_g / macro_total) * 100
+        fat_pct = (fat_g / macro_total) * 100
+    else:
+        protein_pct = carbs_pct = fat_pct = 0.0
+
+    meal_title = extract_meal_name(result.image_path)
+    total_weight = sum(item.grams for item in result.ingredients)
+    status_text = "Partial analysis" if result.status == AnalysisStatus.partial else "Analysis complete"
+    meal_thumb = render_meal_thumbnail(result, settings)
+
+    warning_html = ""
+    if result.status == AnalysisStatus.partial:
+        warning_html += render_message(
+            "Partial analysis",
+            "Some ingredients could not be matched to USDA nutrition facts.",
+            kind="warning",
+        )
+    warning_html += render_warning_list(result.warnings, kind="warning")
+
+    return f"""
+    <article class="card result-card">
+      <div class="result-top">
+        <div class="meal-summary">
+          {meal_thumb}
+          <div>
+            <h2 class="meal-title">{escape(meal_title)}</h2>
+            <p class="meal-weight">Estimated total weight: {total_weight:.0f} g</p>
+            <span class="result-status">{escape(status_text)}</span>
+          </div>
+        </div>
+        <div class="metrics-row">
+          {metric_card("Calories", f"{result.totals.kcal:.0f}", "kcal", drop_svg())}
+          {metric_card("Protein", f"{result.totals.protein_g:.1f}", "g", leaf_svg())}
+          {metric_card("Carbohydrates", f"{result.totals.carbs_g:.1f}", "g", wheat_svg())}
+          {metric_card("Fats", f"{result.totals.fat_g:.1f}", "g", drop_svg())}
+        </div>
+      </div>
+
+      <div class="macro-section">
+        <h4>Macronutrient Balance</h4>
+        <div class="macro-bar" aria-label="Macronutrient balance">
+          <span class="macro-segment protein" style="width: {protein_pct:.2f}%"></span>
+          <span class="macro-segment carbs" style="width: {carbs_pct:.2f}%"></span>
+          <span class="macro-segment fat" style="width: {fat_pct:.2f}%"></span>
+        </div>
+        <div class="macro-legend">
+          <span class="legend-item"><span class="legend-dot protein"></span>Protein {protein_pct:.0f}% ({protein_g:.1f} g)</span>
+          <span class="legend-item"><span class="legend-dot carbs"></span>Carbs {carbs_pct:.0f}% ({carbs_g:.1f} g)</span>
+          <span class="legend-item"><span class="legend-dot fat"></span>Fats {fat_pct:.0f}% ({fat_g:.1f} g)</span>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        {render_ingredients_table(result)}
+      </div>
+    </article>
+    {warning_html}
+    """
+
+
+def render_meal_thumbnail(result: AnalysisResult, settings: Settings | None) -> str:
+    image_url = upload_image_url(result.image_path, settings)
+    if image_url:
+        return (
+            '<div class="meal-thumb">'
+            f'<img class="meal-thumb-img" src="{escape(image_url, quote=True)}" alt="{escape(extract_meal_name(result.image_path), quote=True)}">'
+            "</div>"
+        )
+    return f'<div class="meal-thumb" aria-hidden="true">{plate_svg()}</div>'
+
+
+def render_ingredients_table(result: AnalysisResult) -> str:
+    rows = []
+    for item in result.ingredients:
+        confidence_pct = max(0, min(100, item.confidence * 100))
+        rows.append(
+            f"""
+            <tr>
+              <td class="ingredient-name">{escape(item.name)}</td>
+              <td>{item.grams:.0f} g</td>
+              <td>{item.nutrition.kcal:.0f} kcal</td>
+              <td>{item.nutrition.protein_g:.1f} g</td>
+              <td>{item.nutrition.carbs_g:.1f} g</td>
+              <td>{item.nutrition.fat_g:.1f} g</td>
+              <td class="confidence-cell">
+                <span class="confidence-label">{confidence_pct:.0f}%</span>
+                <span class="confidence-track"><span class="confidence-fill" style="width: {confidence_pct:.0f}%"></span></span>
+              </td>
+              <td>{escape(item.source or "")}</td>
+            </tr>
+            """
+        )
+
+    total_weight = sum(item.grams for item in result.ingredients)
+    rows.append(
+        f"""
+        <tr class="row-total">
+          <td>TOTAL</td>
+          <td>{total_weight:.0f} g</td>
+          <td>{result.totals.kcal:.0f} kcal</td>
+          <td>{result.totals.protein_g:.1f} g</td>
+          <td>{result.totals.carbs_g:.1f} g</td>
+          <td>{result.totals.fat_g:.1f} g</td>
+          <td>-</td>
+          <td>-</td>
+        </tr>
+        """
+    )
+
+    return f"""
+    <table>
+      <thead>
+        <tr>
+          <th>Ingredient</th>
+          <th>Amount/Grams</th>
+          <th>Calories</th>
+          <th>Protein</th>
+          <th>Carbs</th>
+          <th>Fats</th>
+          <th>Confidence</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody>
+        {"".join(rows)}
+      </tbody>
+    </table>
+    """
+
+
+def render_warning_list(warnings: list[str], *, kind: str) -> str:
+    if not warnings:
+        return ""
+    safe_kind = "error" if kind == "error" else "warning"
+    items = "\n".join(f"<li>{escape(warning)}</li>" for warning in warnings)
+    return f"""
+    <div class="message-box {safe_kind}">
+      {alert_svg()}
+      <div>
+        <h4>Warnings</h4>
+        <ul>
+          {items}
+        </ul>
+      </div>
+    </div>
+    """
+
+
 def render_message(title: str, detail: str, *, kind: str) -> str:
     safe_kind = "error" if kind == "error" else "warning"
     return f"""
