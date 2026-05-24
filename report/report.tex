@@ -1,0 +1,442 @@
+% chktex-file 1
+% chktex-file 8
+% chktex-file 11
+% chktex-file 13
+% chktex-file 18
+% chktex-file 26
+% chktex-file 36
+% =====================================================================
+% AI Academy -- National AI Center
+% AI-ENG-110 Software Engineering Final Project Report
+% Team: StomachSlave
+% Topic 2: AI Food Analyzer
+% =====================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[dvipsnames]{xcolor}
+\usepackage[margin=2.2cm,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[final,protrusion=true,expansion=false]{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage[parfill]{parskip}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+
+\emergencystretch=3em
+\hbadness=10000
+\hfuzz=2pt
+
+\newcommand{\teamname}{StomachSlave}
+\newcommand{\topicchoice}{Topic 2 -- AI Food Analyzer}
+\newcommand{\member}[2]{\textbf{#1} (#2)}
+\newcommand{\codepath}[1]{\path{#1}}
+\newcommand{\reportdate}{May 24, 2026}
+\newcommand{\repolink}{\url{https://github.com/GeminusF/ai-eng-110-final-project-ss-stomachslave}}
+\newcommand{\coursecode}{AI-ENG-110}
+\newcommand{\coursename}{Software Engineering}
+\newcommand{\institution}{AI Academy, National AI Center}
+\newcommand{\semester}{Spring 2026}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={AI-ENG-110 Final Project Report -- StomachSlave},
+  pdfauthor={StomachSlave}
+}
+
+\definecolor{accent}{HTML}{0B3D91}
+\definecolor{soft}{HTML}{F2F4F8}
+\definecolor{codegreen}{rgb}{0,0.55,0}
+\definecolor{codegray}{rgb}{0.4,0.4,0.4}
+\definecolor{codepurple}{rgb}{0.55,0,0.78}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\titleformat{\section}
+  {\Large\bfseries\color{accent}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}
+  {\large\bfseries\color{accent}}{\thesubsection}{0.5em}{}
+
+\lstdefinestyle{python}{
+  language=Python,
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{accent},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,
+  breaklines=true,
+  keepspaces=true,
+  numbers=left,
+  numbersep=6pt,
+  tabsize=2,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{\coursecode\ -- Final Report -- \teamname}}
+\fancyhead[R]{\small\textit{\semester}}
+\fancyfoot[L]{\small\textit{\institution}}
+\fancyfoot[R]{\small Page~\thepage\ of~\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\begin{document}
+
+\begin{center}
+{\small \textsc{\institution} \\[0.2em] \textsc{\coursecode\ -- \coursename\ -- \semester}}\\[1.2em]
+{\Large\bfseries\color{accent} Final Project Report}\\[0.3em]
+{\LARGE\bfseries \topicchoice}\\[0.6em]
+\rule{0.85\textwidth}{0.6pt}
+\end{center}
+
+\vspace{0.6em}
+\begin{tabularx}{\textwidth}{@{}lXlX@{}}
+\textbf{Team:} & \teamname & \textbf{Date:} & \reportdate \\
+\textbf{Repo:} & \repolink & \textbf{Tag:} & \texttt{v1.0-final} created \\
+\textbf{Members:} & \multicolumn{3}{X@{}}{%
+  \member{Fereh Feyzullayev}{@GeminusF},\quad
+  \member{Milana Karimova}{@milanakarimova},\quad
+  \member{Nicat Agayev}{@Nicat-Agayev}
+}\\
+\end{tabularx}
+\vspace{0.4em}\hrule\vspace{0.6em}
+
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+StomachSlave is a Topic 2 AI Food Analyzer that accepts a meal image, identifies visible ingredients and estimated portions, retrieves nutrition facts, computes calories and macronutrients, and exposes the same workflow through a Typer CLI, FastAPI HTTP API, and HTMX web UI. The implementation keeps the provided \texttt{ai/} package as a boundary and wraps it with configuration, retries, caching, logging, validation, storage, and bounded asynchronous orchestration. The benchmark command \texttt{python scripts\textbackslash bench.py --image data\textbackslash rice\_chicken\_broccoli.png} measured 3 offline nutrition lookups with sequential time 0.0013s and concurrent time 0.0013s; this does not show a wall-clock speedup because the fake providers return almost immediately, but the concurrency behavior is directly tested with a semaphore-bound workload. The robustness story is that invalid images are rejected before provider calls, unknown meals return a structured \texttt{unknown\_meal} result, and individual nutrition lookup failures become warnings so the pipeline can still return partial results when possible. The full test suite passed in the project virtual environment with 88 tests passing and 85.62\% coverage, including the required 29 provided AI smoke tests. If we restarted the project, the main change would be to build a benchmark with realistic artificial latency so the performance section better demonstrates the value of parallel USDA calls.
+
+\tableofcontents
+\vspace{0.6em}\hrule\vspace{0.4em}
+
+\section{Project Overview}
+
+\subsection{Problem framing and scope}
+
+The problem from \texttt{TOPIC.md} is to build the software-engineering layer around a provided AI module for meal-image analysis. The user supplies a PNG or JPEG meal image. The system identifies visible ingredients with estimated weights, looks up nutrition facts for each ingredient, and returns per-ingredient and total calories, protein, carbohydrates, and fat.
+
+The project has three user-facing entry points. The CLI supports \texttt{python -m foodanalyzer analyze <path>}, optional \texttt{--offline}, optional \texttt{--json}, and a \texttt{history} command. The HTTP API exposes \texttt{GET /health}, \texttt{POST /analyze}, \texttt{GET /analyses}, and \texttt{GET /analyses/\{analysis\_id\}}. The HTMX web UI is mounted under \texttt{/ui} and uses the same analyzer service as the API and CLI.
+
+The reproducible demo path uses local fake providers in \texttt{foodanalyzer.offline}, so it needs no API keys or network access. The online path supports OpenRouter as an app-layer VLM adapter and USDA FoodData Central as the nutrition provider, with PostgreSQL used for analysis history and the persistent nutrition cache. There is no embedding provider in Topic 2 because this topic does not require embeddings.
+
+\subsection{Provider choice and the AI module contract}
+
+The original provided AI package supports Anthropic, OpenAI, and Google Gemini VLM providers through \texttt{LLM\_PROVIDER}. This project also adds \texttt{OpenRouterVLM} in the SE layer, configured with \texttt{LLM\_PROVIDER=openrouter}, \texttt{LLM\_MODEL}, \texttt{OPENROUTER\_API\_KEY}, and \texttt{OPENROUTER\_BASE\_URL}. The default example model in \texttt{.env.example} is \texttt{nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free}. Nutrition lookup uses the provided \texttt{ai.NutritionProvider} contract, with the online app path using \texttt{ai.USDAProvider}.
+
+The application calls the provided AI surface through \codepath{ai.identify_ingredients}, \codepath{ai.compute_totals}, and the \codepath{ai.NutritionProvider.lookup} method. We did not modify the public interface of the provided \texttt{ai/} package. The OpenRouter integration implements the existing \texttt{VLMProvider} interface and is injected into \codepath{ai.identify_ingredients(..., vlm=provider)} rather than bypassing the course package.
+
+Malformed model responses are handled in two layers. The provided \texttt{ai.identify\_ingredients} validates JSON against its schema and pydantic models reject negative grams, invalid confidence, missing fields, empty names, and extra fields. The OpenRouter adapter also strips Markdown fences, extracts JSON candidates, retries with a stricter JSON-only prompt, and repairs limited cases such as a missing top-level \texttt{meal\_recognized} flag when ingredients are present.
+
+\section{Architecture}
+
+\subsection{Module map}
+
+\begin{center}
+\begin{verbatim}
+CLI             FastAPI API              HTMX UI
+ |                  |                       |
+ +------------------+-----------------------+
+                    |
+                    v
+             AnalyzerService
+                    |
+                    v
+               AIService
+        retries, cache, logging
+          |                  |
+          v                  v
+   provided ai/         NutritionProvider
+ identify_ingredients   USDA/offline
+ compute_totals             |
+                            v
+             Nutrition cache: memory or PostgreSQL
+                    |
+                    v
+        Analysis repository: memory or PostgreSQL
+\end{verbatim}
+\end{center}
+
+The provided \texttt{ai/} package boundary is crossed only from \texttt{AIService} and the OpenRouter adapter that implements the provided \texttt{VLMProvider} interface. Storage is hidden behind repository/cache protocols, so the CLI, API, and web UI do not know whether the backing implementation is in-memory or PostgreSQL. Swapping from OpenRouter to one of the built-in providers mostly changes environment variables and the VLM construction in \texttt{foodanalyzer.cli.build\_vlm}; the analyzer and routes remain unchanged.
+
+\begin{description}[leftmargin=2.8cm,style=nextline]
+  \item[\texttt{foodanalyzer.api}] Creates the FastAPI app, validates multipart uploads, saves safe upload filenames, and returns pydantic response models.
+  \item[\texttt{foodanalyzer.cli}] Builds configured services and provides the table/JSON command-line interface.
+  \item[\texttt{AnalyzerService}] Owns the business workflow: identify ingredients, handle unknown meals, fetch nutrition in parallel, compute totals, and save records.
+  \item[\texttt{AIService}] Wraps the provided AI calls with retries, logging, and cache-aware nutrition lookup.
+  \item[\texttt{concurrency.pipeline}] Runs bounded parallel nutrition lookups and converts individual provider failures into warnings.
+  \item[\texttt{storage.repository}] Persists analysis history through either an in-memory repository or PostgreSQL.
+  \item[\texttt{services.nutrition\_cache}] Provides TTL cache implementations for memory and PostgreSQL.
+\end{description}
+
+\subsection{OOP design and key abstractions}
+
+The project uses composition around protocols for storage and caching. This is a good fit because the analyzer only needs a small behavioral contract; it should not care whether results are stored in memory during offline tests or in PostgreSQL during online runs.
+
+\begin{lstlisting}[style=python]
+class AnalysisRepository(Protocol):
+    async def save(self, result: AnalysisResult) -> AnalysisRecord: ...
+    async def list_recent(self, limit: int = 10) -> list[AnalysisRecord]: ...
+    async def get(self, analysis_id: str) -> AnalysisRecord | None: ...
+    async def health(self) -> bool: ...
+
+class InMemoryAnalysisRepository:
+    ...
+
+class PostgresAnalysisRepository:
+    ...
+\end{lstlisting}
+
+The analyzer receives an \texttt{AnalysisRepository} through its constructor, which is composition rather than inheritance. That makes the same core workflow usable in tests, offline demos, API routes, CLI commands, and PostgreSQL-backed online mode. The cache uses the same pattern through \texttt{NutritionCacheBackend}; \texttt{OpenRouterVLM} is the inheritance example because it implements the provided abstract \texttt{VLMProvider}.
+
+\subsection{Data flow across module boundaries}
+
+The SE-layer models are \texttt{AnalysisStatus}, \texttt{NutritionTotals}, \texttt{IngredientResult}, \texttt{AnalysisResult}, \texttt{AnalysisRecord}, and \texttt{ErrorResponse}. These are pydantic models with forbidden extra fields where appropriate, so API responses, repository payloads, and analyzer outputs are typed. The code also uses provided \texttt{ai.Ingredient}, \texttt{ai.NutritionFacts}, and \texttt{ai.Nutrition} values at the AI boundary.
+
+The project does use dictionaries internally for provider payloads, cache maps, and \texttt{facts\_by\_name}. User-facing and storage-facing boundaries use pydantic models, and the main analyzer contract returns \texttt{AnalysisResult} or \texttt{AnalysisRecord}, not an unstructured dictionary.
+
+\section{Concurrency and Performance}
+
+\subsection{Why this concurrency model}
+
+Nutrition lookups are independent after the VLM returns a list of ingredients, so the project uses \texttt{asyncio.gather} with \texttt{asyncio.Semaphore}. The default bound is \texttt{MAX\_CONCURRENCY=10}, configured through pydantic settings. The target bottleneck is I/O latency from USDA/provider calls rather than CPU work, so process-based parallelism would add overhead without helping.
+
+The current implementation wraps blocking provider calls with \texttt{asyncio.to\_thread}, then coordinates them from async code. Setting the semaphore to 1 makes the nutrition stage effectively sequential. Setting it very high would increase burst pressure on providers and PostgreSQL; the implementation defaults to 10 as a conservative request-level bound.
+
+\subsection{Sequential-vs-concurrent benchmark}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}>{\RaggedRight\arraybackslash}Xcccc@{}}
+\toprule
+\textbf{Workload} & $N$ & \textbf{Sequential (s)} & \textbf{Concurrent (s)} & \textbf{Speedup} \\
+\midrule
+Offline lookup for \codepath{rice_chicken_broccoli.png} & 3 & 0.0013 & 0.0013 & 1.00x \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The benchmark was run on Windows with Python 3.12.10 from the project virtual environment using:
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+.venv\Scripts\python.exe scripts\bench.py --image data\rice_chicken_broccoli.png
+\end{lstlisting}
+
+The cache is cleared between the sequential and concurrent portions inside \texttt{scripts/bench.py}. The result is honest but not very illustrative: the offline fake provider is so fast that scheduling overhead dominates and there is no measurable speedup. The concurrency design is still verified by \texttt{tests/test\_pipeline.py::test\_pipeline\_bounds\_parallelism}, which creates five async lookup tasks and asserts that no more than the configured limit are active at once.
+
+\subsection{Rate limit and politeness}
+
+The project does not implement a token bucket or request-per-minute budget. Its actual rate-limit protection is bounded concurrency through \texttt{asyncio.Semaphore(max\_concurrency)} plus retry with exponential jitter for provider-level transient errors. The default highest application burst is 10 concurrent nutrition lookups, while the explicit test uses a limit of 2 and verifies the bound.
+
+If a provider turns HTTP 429 into \texttt{ProviderError}, \texttt{run\_with\_retries} retries it because \texttt{ProviderError} is in the retry set. This strategy has not been verified against a real observed 429 in this report; it is covered structurally by tests around provider failure and retry behavior rather than live rate-limit testing.
+
+\section{Robustness and Error Handling}
+
+\subsection{Wrapping the AI module}
+
+\texttt{AIService} wraps \codepath{ai.identify_ingredients}, \codepath{ai.NutritionProvider.lookup}, and \codepath{ai.compute_totals}. The first two external/provider calls are executed through \codepath{run_with_retries}, which uses tenacity's retry loop with \codepath{AsyncRetrying}, \codepath{stop_after_attempt(settings.retry_attempts)}, and exponential jitter capped at 2.0 seconds. It retries \texttt{ProviderError}, \texttt{TimeoutError}, and \texttt{OSError}; it re-raises after attempts are exhausted.
+
+The wrapper logs start, cache hits, cache misses, failures, and completion counts through Python's \texttt{logging} module. It does not currently add a custom per-call timeout; timeout exceptions are handled if raised by lower layers. Input validation happens before provider calls for image file type and size, and pydantic validation guards provider output from the provided AI module.
+
+\subsection{Failure-mode analysis}
+
+One concrete exercised failure mode is a nutrition provider failure for one ingredient. The test \texttt{test\_pipeline\_handles\_one\_failed\_lookup} creates two ingredients, makes the service raise \texttt{ProviderError} for one of them, and then calls \texttt{lookup\_nutrition\_parallel}. The system returns facts for the successful ingredient and one warning instead of crashing the whole analysis.
+
+The user-facing result for this class of failure is a partial or failed structured analysis, depending on whether at least one nutrition lookup succeeds. The logs include \texttt{nutrition\_lookup\_failed} with the ingredient name. A related test, \texttt{test\_pipeline\_redacts\_api\_key\_from\_provider\_errors}, verifies that provider error messages containing \texttt{api\_key=} are sanitized before becoming warnings.
+
+\subsection{Input validation}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Entry point} & \textbf{Validation and user-visible behavior} \\
+\midrule
+CLI image path & \texttt{validate\_image\_path} checks that the file exists, is under the configured byte limit, and has PNG/JPEG magic bytes. The CLI prints \texttt{Invalid image: ...} and exits with code 2. \\
+HTTP upload & \texttt{save\_upload\_bytes} rejects empty, oversized, non-PNG, and non-JPEG uploads. The API returns HTTP 422 with a clear detail string. \\
+Filesystem upload name & User filenames are not trusted. The app generates a UUID-prefixed safe name, preserves only a safe suffix, and checks the resolved path stays inside \texttt{UPLOAD\_DIR}. \\
+Environment & \texttt{Settings} validates numeric bounds and normalizes \texttt{LOG\_LEVEL}; invalid log levels raise a pydantic validation error. \\
+API history lookup & Missing analysis ids return HTTP 404 with \texttt{analysis not found}. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Storage and Caching}
+
+\subsection{Schema}
+
+The persistent storage is PostgreSQL through \texttt{asyncpg}. Analysis records are stored as JSONB payloads in one table; this keeps the pydantic response model as the source of truth for detailed ingredients and totals.
+
+\begin{lstlisting}[style=python,language=sql,numbers=none,basicstyle=\ttfamily\small]
+create table if not exists analyses (
+    id text primary key,
+    created_at timestamptz not null,
+    image_path text not null,
+    status text not null,
+    payload jsonb not null
+);
+
+create table if not exists nutrition_cache (
+    key text primary key,
+    ingredient_name text not null,
+    payload jsonb not null,
+    expires_at timestamptz not null,
+    updated_at timestamptz not null
+);
+\end{lstlisting}
+
+The cached derived fields are the nutrition facts returned by the nutrition provider. The source-of-truth for final analysis output is the serialized \texttt{AnalysisRecord} payload in \texttt{analyses}. The schema does not split ingredients into a separate relational table, so querying individual ingredients across all analyses would require JSONB queries or a future migration.
+
+\subsection{Caching policy}
+
+The app caches nutrition facts by normalized ingredient name. Normalization lowercases the string, strips non-alphanumeric separators, and collapses whitespace, so \texttt{" White Rice (Cooked) "} becomes \texttt{"white rice cooked"}. The default TTL is 86400 seconds, or 24 hours.
+
+Offline mode uses \texttt{InMemoryNutritionCache}; online mode uses \texttt{PostgresNutritionCache}. Cache entries expire by timestamp, and expired PostgreSQL rows are ignored and deleted on lookup for that key. This report does not claim a measured cache hit rate from a production-like demo run; tests cover cache hit, miss, expiry, clear, schema creation, and unavailable database handling.
+
+\section{Testing}
+
+\subsection{Strategy and coverage}
+
+Tests are written with pytest and are designed to run offline. The AI module is mocked with fake VLM and nutrition providers in \texttt{tests/conftest.py}; API tests use FastAPI's \texttt{TestClient}; OpenRouter tests use fake client objects rather than live network access. The required provided smoke tests remain enabled.
+
+The verified commands were run from the project virtual environment on Windows/Python 3.12.10:
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+.venv\Scripts\python.exe -m pytest tests\test_ai_smoke.py -v -p no:cacheprovider
+.venv\Scripts\python.exe -m pytest --cov=foodanalyzer --cov-fail-under=60 --cov-report=term-missing -p no:cacheprovider
+\end{lstlisting}
+
+\begin{center}\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Suite} & \textbf{Result} \\
+\midrule
+Provided \texttt{tests/test\_ai\_smoke.py} & 29 passed \\
+Full offline suite & 88 passed \\
+\texttt{foodanalyzer/} coverage & 85.62\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The lowest covered area is the PostgreSQL repository implementation because most tests use in-memory storage for speed and offline reproducibility. The unused \texttt{RateLimiter} helper is also uncovered because the actual concurrency path currently uses a direct semaphore in \texttt{concurrency.pipeline}.
+
+\subsection{Notable tests}
+
+\begin{itemize}[leftmargin=2em]
+  \item \codepath{test_api_analyze_offline} is the API happy path: it uploads \codepath{data/rice_chicken_broccoli.png}, receives HTTP 200, and verifies a completed analysis with positive calories.
+  \item \texttt{test\_pipeline\_bounds\_parallelism} is the concurrency test: it tracks active lookup calls and asserts the observed maximum stays within the configured semaphore limit.
+  \item \texttt{test\_openrouter\_vlm\_retries\_non\_json\_with\_stricter\_prompt} exercises malformed model output and verifies the adapter retries with stricter JSON instructions.
+  \item \texttt{test\_api\_rejects\_non\_image} and \texttt{test\_validate\_image\_path\_rejects\_non\_image} verify invalid image handling before provider calls.
+\end{itemize}
+
+The most useful missing test would be an online-mode integration test against a disposable PostgreSQL service plus mocked USDA/VLM HTTP behavior, because it would cover the real asyncpg repository path without depending on live providers.
+
+\section{Deployment and Reproducibility}
+
+\subsection{Docker image}
+
+The Dockerfile is a single-stage image based on \texttt{python:3.11-slim}. It installs pinned dependencies from \texttt{requirements.txt}, copies the repository, sets \texttt{OFFLINE\_MODE=true}, exposes port 8000, and starts:
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+uvicorn foodanalyzer.api:app --host 0.0.0.0 --port 8000
+\end{lstlisting}
+
+The documented build and run commands are:
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+docker build -t foodanalyzer .
+docker run --env OFFLINE_MODE=true -p 8000:8000 foodanalyzer
+docker compose up --build app
+\end{lstlisting}
+
+The Docker image size was not measured for this report. The repository also includes \texttt{docker-compose.yml} with a PostgreSQL 16 service and an app service that connects to \texttt{postgresql://postgres:dev@db:5432/foodanalyzer}.
+
+\subsection{Configuration}
+
+The app reads configuration through \texttt{foodanalyzer.config.Settings}, with \texttt{.env} support from \texttt{pydantic-settings}. Important variables are:
+
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{APP\_NAME}: FastAPI title; defaults to \texttt{AI Food Analyzer}.
+  \item \texttt{OFFLINE\_MODE}: if true, uses fake providers and in-memory storage/cache.
+  \item \texttt{LOG\_LEVEL}: defaults to \texttt{INFO}; invalid values are rejected.
+  \item \texttt{DATABASE\_URL}: required for online PostgreSQL history and nutrition cache.
+  \item \texttt{NUTRITION\_CACHE\_TTL\_SECONDS}: defaults to 86400.
+  \item \texttt{MAX\_IMAGE\_SIZE\_MB}: defaults to 5.
+  \item \texttt{MAX\_CONCURRENCY}: defaults to 10.
+  \item \texttt{RETRY\_ATTEMPTS}: defaults to 3.
+  \item \texttt{HTTP\_PORT}: defaults to 8000.
+  \item \texttt{UPLOAD\_DIR}: defaults to \texttt{uploads}.
+  \item \texttt{LLM\_PROVIDER}, \texttt{LLM\_MODEL}, and provider API keys: required for online VLM calls.
+  \item \texttt{OPENROUTER\_*}: required only when using the OpenRouter adapter.
+  \item \texttt{NUTRITION\_PROVIDER}: defaults to \texttt{usda}; only USDA is implemented in the app layer.
+  \item \texttt{USDA\_API\_KEY}: required for online USDA lookup.
+\end{itemize}
+
+\section{Limitations and Future Work}
+
+\begin{itemize}[leftmargin=2em]
+  \item The offline benchmark does not demonstrate real speedup because the fake provider has almost no latency. A better benchmark would add controlled artificial delay or mock HTTP latency.
+  \item There is no multi-provider failover. If the configured VLM provider fails after retries, the analysis fails.
+  \item There is no token-aware or request-per-minute rate limiter; the current protection is bounded concurrency plus retry.
+  \item The PostgreSQL analysis schema stores detailed results as JSONB payloads, which is simple but less convenient for relational analytics over ingredients.
+  \item Online behavior depends on external VLM and USDA availability, correct keys, model image support, and provider response quality.
+\end{itemize}
+
+\section{Tools and Acknowledgements}
+
+The course-provided \texttt{ai/} package supplies the core AI operations: VLM ingredient identification, USDA nutrition lookup, pydantic schemas, and totals calculation. The team built the surrounding software-engineering layer: configuration, CLI, HTTP API, HTMX UI, storage, cache, retries, validation, Docker, and tests.
+
+AI coding assistants were used as engineering collaborators for implementation support, debugging, README preparation, and report drafting. The generated suggestions were reviewed against the repository and adjusted to match the actual code and assignment rules. The final report intentionally avoids claims that were not verified in the current app.
+
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=2pt]
+  \item AI Academy, National AI Center. \textit{AI-ENG-110 Software Engineering Final Project Brief}, v2.0, May 13, 2026.
+  \item Course Topic 2 specification: \texttt{TOPIC.md}, AI Food Analyzer.
+  \item FastAPI documentation: \url{https://fastapi.tiangolo.com/}
+  \item Pydantic Settings documentation: \url{https://docs.pydantic.dev/latest/concepts/pydantic_settings/}
+  \item Tenacity retrying library: \url{https://tenacity.readthedocs.io/}
+  \item USDA FoodData Central API: \url{https://fdc.nal.usda.gov/api-guide.html}
+  \item OpenRouter API documentation: \url{https://openrouter.ai/docs}
+\end{enumerate}
+
+\appendix
+\section{Appendix -- Reproducing the benchmark}
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+git clone https://github.com/GeminusF/ai-eng-110-final-project-ss-stomachslave
+cd ai-eng-110-final-project-ss-stomachslave
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe scripts\bench.py --image data\rice_chicken_broccoli.png
+\end{lstlisting}
+
+Observed output used in this report:
+
+\begin{lstlisting}[style=python,language=bash,numbers=none]
+mode,ingredients,seconds
+sequential,3,0.0013
+concurrent,3,0.0013
+\end{lstlisting}
+
+\vspace{1em}\hrule\vspace{0.6em}
+\noindent\small\textit{End of report.}
+
+\end{document}
